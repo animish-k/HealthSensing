@@ -1,0 +1,2 @@
+# HealthSensing
+Building a Personal Health Analytics dashboard to have personalized health data and metrics as well as generating early warnings for environmental health risks

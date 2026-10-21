@@ -10,7 +10,7 @@ It does not measure real-world or medical performance.
 import numpy as np
 import pandas as pd
 import sys
-from pathlib import path
+from pathlib import Path
 from sklearn.metrics import (
     confusion_matrix,
     precision_score,

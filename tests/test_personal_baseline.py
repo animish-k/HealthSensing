@@ -49,3 +49,14 @@ def test_rejects_non_finite_readings():
 def test_rejects_invalid_threshold():
     with pytest.raises(ValueError):
         detect_anomalies([70], [69, 70, 71], threshold=0)
+
+
+def test_rejects_empty_readings():
+    with pytest.raises(ValueError):
+        detect_anomalies([], [69, 70, 71])
+
+
+def test_rejects_multidimensional_readings():
+    with pytest.raises(ValueError):
+        detect_anomalies([[70, 71]], [69, 70, 71])
+

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query
+from fastapi.encoders import jsonable_encoder
 
 from backend.db.database import MeasurementRepository
 from backend.models.measurement import Measurement, MeasurementResponse
@@ -18,7 +19,7 @@ async def ingest_reading(
     repository: MeasurementRepository = Depends(get_repository),
 ) -> MeasurementResponse:
     saved = repository.add(measurement)
-    await manager.broadcast(saved.dict())
+    await manager.broadcast(jsonable_encoder(saved))
     return saved
 
 

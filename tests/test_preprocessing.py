@@ -11,6 +11,7 @@ from ai.features.feature_engineering import (
     extract_window_features,
     extract_features_from_windows,
 )
+from ai.features.rolling_features import calculate_rolling_features
 
 
 # ==========================================
@@ -359,3 +360,94 @@ def test_single_value_has_nan_std_and_trend():
     assert result["heart_rate_mean"] == 75
     assert pd.isna(result["heart_rate_std"])
     assert pd.isna(result["heart_rate_trend"])
+
+
+# ==========================================
+# ROLLING FEATURES TESTS
+# ==========================================
+
+
+def test_rolling_mean():
+    data = pd.DataFrame({"heart_rate": [75, 77, 79, 83]})
+
+    result = calculate_rolling_features(data, window_size=3)
+
+    assert pd.isna(result.loc[0, "heart_rate_rolling_mean"])
+    assert result.loc[2, "heart_rate_rolling_mean"] == 77
+
+
+def test_rolling_standard_deviation():
+    data = pd.DataFrame({"heart_rate": [75, 77, 79]})
+
+    result = calculate_rolling_features(data, window_size=3)
+
+    assert round(result.loc[2, "heart_rate_rolling_std"], 2) == 2.00
+
+
+def test_rolling_minimum_and_maximum():
+    data = pd.DataFrame({"heart_rate": [75, 77, 79]})
+
+    result = calculate_rolling_features(data, window_size=3)
+
+    assert result.loc[2, "heart_rate_rolling_min"] == 75
+    assert result.loc[2, "heart_rate_rolling_max"] == 79
+
+
+def test_rolling_range():
+    data = pd.DataFrame({"heart_rate": [75, 77, 79]})
+
+    result = calculate_rolling_features(data, window_size=3)
+
+    assert result.loc[2, "heart_rate_rolling_range"] == 4
+
+
+def test_original_columns_are_preserved():
+    data = pd.DataFrame({"heart_rate": [75, 77, 79]})
+
+    result = calculate_rolling_features(data, window_size=2)
+
+    assert "heart_rate" in result.columns
+    assert result["heart_rate"].tolist() == [75, 77, 79]
+
+
+def test_multiple_features_are_calculated():
+    data = pd.DataFrame({
+        "heart_rate": [75, 77, 79],
+        "spo2": [99, 98, 97],
+    })
+
+    result = calculate_rolling_features(data, window_size=2)
+
+    assert "heart_rate_rolling_mean" in result.columns
+    assert "spo2_rolling_mean" in result.columns
+
+
+def test_custom_min_periods():
+    data = pd.DataFrame({"heart_rate": [75, 77, 79]})
+
+    result = calculate_rolling_features(
+        data,
+        window_size=3,
+        min_periods=1,
+    )
+
+    assert result.loc[0, "heart_rate_rolling_mean"] == 75
+
+
+def test_invalid_window_size_raises_error():
+    data = pd.DataFrame({"heart_rate": [75, 77, 79]})
+
+    with pytest.raises(ValueError):
+        calculate_rolling_features(data, window_size=0)
+
+
+def test_invalid_min_periods_raises_error():
+    data = pd.DataFrame({"heart_rate": [75, 77, 79]})
+
+    with pytest.raises(ValueError):
+        calculate_rolling_features(
+            data,
+            window_size=3,
+            min_periods=4,
+        )
+

@@ -1,11 +1,21 @@
 
 
+
 import pandas as pd
 import pytest
 
 from ai.preprocessing.cleaning import clean_readings
 from ai.preprocessing.normalization import DataFrameNormalizer
+from ai.preprocessing.windowing import create_windows
+from ai.features.feature_engineering import (
+    extract_window_features,
+    extract_features_from_windows,
+)
 
+
+# ==========================================
+# CLEANING TESTS
+# ==========================================
 
 def sample_data():
     return pd.DataFrame({
@@ -18,9 +28,6 @@ def sample_data():
         "spo2": [98, 97, 96],
         "scenario": ["normal", "normal", "heatwave"],
     })
-
-
-# CLEANING TESTS
 
 
 def test_valid_data_is_preserved():
@@ -83,8 +90,9 @@ def test_timestamp_is_converted_to_utc():
     assert str(result["timestamp"].dtype) == "datetime64[ns, UTC]"
 
 
+# ==========================================
 # NORMALIZATION TESTS
-
+# ==========================================
 
 def test_standard_scaling():
     data = pd.DataFrame({
@@ -174,3 +182,180 @@ def test_missing_values_are_preserved():
     result = normalizer.fit_transform(data)
 
     assert pd.isna(result.loc[1, "heart_rate"])
+
+
+# ==========================================
+# WINDOWING TESTS
+# ==========================================
+
+def window_sample_data():
+    return pd.DataFrame({
+        "timestamp": pd.date_range(
+            "2026-11-01 10:00:00",
+            periods=5,
+            freq="2s",
+            tz="UTC",
+        ),
+        "heart_rate": [75, 77, 79, 83, 88],
+        "spo2": [99, 98, 98, 97, 96],
+    })
+
+
+def test_correct_number_of_windows():
+    result = create_windows(
+        window_sample_data(),
+        window_size=3,
+        stride=1,
+    )
+
+    assert len(result) == 3
+
+
+def test_window_contents_are_correct():
+    result = create_windows(
+        window_sample_data(),
+        window_size=3,
+        stride=1,
+    )
+
+    assert result[0]["heart_rate"].tolist() == [75, 77, 79]
+    assert result[1]["heart_rate"].tolist() == [77, 79, 83]
+    assert result[2]["heart_rate"].tolist() == [79, 83, 88]
+
+
+def test_non_overlapping_windows():
+    result = create_windows(
+        window_sample_data(),
+        window_size=2,
+        stride=2,
+    )
+
+    assert len(result) == 2
+    assert result[0]["heart_rate"].tolist() == [75, 77]
+    assert result[1]["heart_rate"].tolist() == [79, 83]
+
+
+def test_readings_are_sorted_chronologically():
+    data = window_sample_data().iloc[::-1]
+
+    result = create_windows(
+        data,
+        window_size=5,
+        stride=1,
+    )
+
+    assert result[0]["heart_rate"].tolist() == [75, 77, 79, 83, 88]
+
+
+def test_insufficient_readings_return_no_windows():
+    data = window_sample_data().iloc[:2]
+
+    result = create_windows(
+        data,
+        window_size=3,
+    )
+
+    assert result == []
+
+
+def test_invalid_window_size_raises_error():
+    with pytest.raises(ValueError):
+        create_windows(window_sample_data(), window_size=0)
+
+
+def test_invalid_stride_raises_error():
+    with pytest.raises(ValueError):
+        create_windows(
+            window_sample_data(),
+            window_size=3,
+            stride=0,
+        )
+
+
+def test_missing_timestamp_column_raises_error():
+    data = window_sample_data().drop(columns=["timestamp"])
+
+    with pytest.raises(ValueError):
+        create_windows(data, window_size=3)
+
+
+# ==========================================
+# FEATURE ENGINEERING TESTS
+# ==========================================
+
+def test_mean_feature():
+    data = pd.DataFrame({"heart_rate": [70, 80, 90]})
+
+    result = extract_window_features(data)
+
+    assert result["heart_rate_mean"] == 80
+
+
+def test_minimum_and_maximum_features():
+    data = pd.DataFrame({"heart_rate": [70, 80, 90]})
+
+    result = extract_window_features(data)
+
+    assert result["heart_rate_min"] == 70
+    assert result["heart_rate_max"] == 90
+
+
+def test_range_feature():
+    data = pd.DataFrame({"heart_rate": [70, 80, 90]})
+
+    result = extract_window_features(data)
+
+    assert result["heart_rate_range"] == 20
+
+
+def test_increasing_trend_is_positive():
+    data = pd.DataFrame({"heart_rate": [70, 75, 80, 85]})
+
+    result = extract_window_features(data)
+
+    assert result["heart_rate_trend"] > 0
+
+
+def test_decreasing_trend_is_negative():
+    data = pd.DataFrame({"spo2": [99, 98, 97, 96]})
+
+    result = extract_window_features(data)
+
+    assert result["spo2_trend"] < 0
+
+
+def test_missing_values_are_ignored():
+    data = pd.DataFrame({
+        "heart_rate": [70, None, 90],
+    })
+
+    result = extract_window_features(data)
+
+    assert result["heart_rate_mean"] == 80
+
+
+def test_multiple_windows_create_feature_table():
+    windows = [
+        pd.DataFrame({"heart_rate": [70, 80, 90]}),
+        pd.DataFrame({"heart_rate": [80, 90, 100]}),
+    ]
+
+    result = extract_features_from_windows(windows)
+
+    assert len(result) == 2
+    assert "heart_rate_mean" in result.columns
+
+
+def test_empty_window_raises_error():
+    with pytest.raises(ValueError):
+        extract_window_features(pd.DataFrame())
+
+
+def test_single_value_has_nan_std_and_trend():
+    data = pd.DataFrame({"heart_rate": [75]})
+
+    result = extract_window_features(data)
+
+    assert result["heart_rate_mean"] == 75
+    assert pd.isna(result["heart_rate_std"])
+    assert pd.isna(result["heart_rate_trend"])

@@ -12,6 +12,21 @@ VALID_RANGES = {
     "pm25_ug_m3": (0.0, 1000.0)
 }
 
+def clean_record(record: Dict[str, Any]) -> Dict[str, Any]:
+    """Validates and cleans a single streaming dictionary record."""
+    cleaned = record.copy()
+    for col, (low, high) in VALID_RANGES.items():
+        if col in cleaned and cleaned[col] is not None:
+            try:
+                val = float(cleaned[col])
+                if val < low or val > high:
+                    cleaned[col] = None
+                else:
+                    cleaned[col] = val
+            except (ValueError, TypeError):
+                cleaned[col] = None
+    return cleaned
+
 def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """Sorts timestamps, drops duplicates, and nullifies sensor glitches."""
     df = df.copy()

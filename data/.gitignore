@@ -1,0 +1,7 @@
+﻿raw/
+*.csv
+*.zip
+*.tar.gz
+*.pkl
+!samples/*.json
+!samples/*.csv

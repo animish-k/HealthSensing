@@ -1,21 +1,40 @@
-﻿# HealthSensing: Pure Genuine Dataset Pipeline & Provenance
+﻿# HealthSensing Data Engineering & Preprocessing Documentation
 
 **Owner:** Kartikeya Singh (Member 1)  
-**Deliverables:** Genuine Data Acquisition, In-Situ Ingestion, Preprocessing, and Empirical EDA  
+**Deliverables:** Ingestion, Multi-Frequency Synchronization, Quality Assurance, and Normalization  
 
-## 1. Provenance of 100% Genuine Data Sources
+## 1. Multi-Frequency Sensor Synchronization Methodology
+* **Chest RespiBAN (ECG, Respiration, Temp):** 700 Hz
+* **Wrist Empatica E4 (BVP):** 64 Hz
+* **Wrist Empatica E4 (EDA & Skin Temp):** 4 Hz
+* **Empatica E4 Precomputed Heart Rate:** 1 Hz
+* **Ground-Truth Protocol Labels:** 700 Hz
 
-### A. WESAD (Wearable Stress and Affect Detection)
-* **Source:** University of Siegen & UCI Machine Learning Repository (S2.pkl & S2_E4_Data).
-* **Modality:** Genuine clinical laboratory physiological recordings from Subject 2 wearing an Empatica E4 wristband.
-* **Extracted Signals:** Real 1 Hz optical Heart Rate, 4 Hz Electrodermal Activity (EDA), and 4 Hz Skin Surface Temperature synchronized with ground-truth stress labels.
-* **File:** data/processed/wesad_s2_real.csv (600 seconds of continuous real human recordings).
+### Synchronization Strategy:
+1. **Target Epoch:** All streams are resampled and aligned into **1-second non-overlapping epochs (1 Hz)**.
+2. **Sub-Second Downsampling:** For 4 Hz signals (EDA and Skin Temp), we compute the 4-sample window mean over each second.
+3. **Heart Rate Integration:** Empatica E4 1 Hz pulse rate is synchronized directly to the second epoch.
+4. **Label Alignment:** Ground-truth labels are sampled at the epoch midpoint (s * 700) to reflect the active experimental condition.
 
-### B. Ljubljana In-Situ Atmospheric Monitoring Dataset
-* **Source:** European Copernicus atmospheric observation stations in Ljubljana, Slovenia (Lat: 46.0569, Lon: 14.5058).
-* **Modality:** Genuine real-world ambient sensor recordings measuring fine particulate matter (PM2.5, PM10), ambient temperature, and relative humidity.
-* **File:** data/processed/ljubljana_real.csv (288 hourly in-situ observations).
+## 2. WESAD Protocol & Ground-Truth Labels
+* **0 = Transient / Undefined:** Unannotated intervals between experimental blocks.
+* **1 = Baseline:** 20-minute relaxed resting condition while reading neutral magazines.
+* **2 = Stress:** Trier Social Stress Test (TSST) consisting of public speaking and mental arithmetic under evaluation.
+* **3 = Amusement:** Watching humorous video clips.
+* **4 = Meditation:** Guided relaxation period.
 
-## 2. Empirical Exploratory Data Analysis (EDA) Findings
-* genuine_wesad_s2_vitals.png: Real physiological sympathetic response of Subject 2 during clinical stress.
-* genuine_ljubljana_environmental.png: Real in-situ recorded particulate pollution curves (PM2.5) and ambient temperature in Ljubljana.
+> **Crucial Rule on Personal Baselines:**  
+> Personal baseline means, standard deviations, and normalization parameters are fitted **strictly on stress_label == 1 (Baseline)**. Observations under stress (label == 2) are strictly evaluated relative to this calibrated baseline.
+
+## 3. Scope & Participant Coverage
+* **Active Clinical Cohort:** Subjects S2, S3, S4, and S5 are parsed and validated through the genuine data pipeline.
+* **Extensibility:** The parser in data/src/parse_real_wesad.py supports unpickling any participant (S2 through S17).
+
+## 4. End-to-End Preprocessing Sequence Execution
+The complete sequence is demonstrated in `run_complete_genuine_pipeline.py`:
+Real Dataset -> Loading -> Cleaning -> Feature Extraction -> Normalization -> Processed Output
+
+Run verification:
+```bash
+python tests/test_preprocessing_pipeline.py
+python run_complete_genuine_pipeline.py
